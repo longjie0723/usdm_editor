@@ -2,6 +2,10 @@
 
 USDM（Universal Specification Describing Manner）形式で要求仕様を階層的に管理・編集するChrome拡張機能です。
 
+### スクリーンショット
+![最上位要求のみ表示](doc/image/screenshot-0.png)
+![すべてのレベルを表示](doc/image/screenshot-1.png)
+
 ## 機能
 
 - **階層的な要求管理**: 最大4レベル（L1〜L4）の階層構造で要求を整理
@@ -60,7 +64,7 @@ USDM（Universal Specification Describing Manner）形式で要求仕様を階�
 
 ## ライセンス
 
-MIT License
+Apache 2.0 License
 
 ## バージョン履歴
 
