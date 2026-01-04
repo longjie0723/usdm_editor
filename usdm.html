@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USDM Editor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1 id="doc-title" title="ダブルクリックで編集">USDM要求仕様書</h1>
+    
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <button id="btn-expand-all">すべて展開</button>
+            <button id="btn-collapse-all">すべて折りたたむ</button>
+        </div>
+        <div class="toolbar-group">
+            <button id="btn-add-root" class="success">＋ 新規要求追加</button>
+        </div>
+        <div class="toolbar-group">
+            <button id="btn-export-csv" class="warning">📥 CSVエクスポート</button>
+            <div class="file-input-wrapper">
+                <button>📤 CSVインポート</button>
+                <input type="file" id="csv-import" accept=".csv">
+            </div>
+        </div>
+        <div class="toolbar-group">
+            <button id="btn-export-pdf" class="danger">🖨️ PDF出力</button>
+        </div>
+        <div class="toolbar-group">
+            <button id="btn-clear-data" style="background: #888;">🗑️ データクリア</button>
+        </div>
+    </div>
+    
+    <div class="tree-container" id="tree-container">
+    </div>
+    
+    <!-- 編集モーダル -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal">
+            <h2 id="modal-title">要求を編集</h2>
+            <div class="id-display" id="id-display"></div>
+            <form id="req-form">
+                <input type="hidden" id="edit-index">
+                <input type="hidden" id="parent-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>レベル1 ID *</label>
+                        <input type="text" id="level1_id" required>
+                    </div>
+                    <div class="form-group">
+                        <label>レベル2 ID</label>
+                        <input type="text" id="level2_id">
+                    </div>
+                    <div class="form-group">
+                        <label>レベル3 ID</label>
+                        <input type="text" id="level3_id">
+                    </div>
+                    <div class="form-group">
+                        <label>レベル4 ID</label>
+                        <input type="text" id="level4_id">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>要求 *</label>
+                    <textarea id="description" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>理由</label>
+                    <textarea id="rationale"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>仕様</label>
+                    <textarea id="specification"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="btn-cancel" class="btn-cancel">キャンセル</button>
+                    <button type="submit" class="btn-save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

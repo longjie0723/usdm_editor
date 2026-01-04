@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "USDM Editor - 要求仕様エディタ",
+  "version": "1.0.0",
+  "description": "USDM（Universal Specification Describing Manner）形式で要求仕様を階層的に管理・編集するツール。CSV入出力、PDF出力に対応。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    },
+    "default_title": "USDM Editorを開く"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage"
+  ]
+}
