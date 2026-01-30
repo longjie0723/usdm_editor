@@ -15,7 +15,8 @@ const defaultRequirements = [
         level4_id: "",
         description: "新しい要求を追加してください",
         rationale: "",
-        specification: ""
+        specification: "",
+        category: ""
     }
 ];
 
@@ -258,10 +259,11 @@ function renderNode(node) {
         const canAddChild = level < 4;
         
         let detailsHtml = '';
-        if (req.rationale || req.specification) {
+        if (req.rationale || req.specification || req.category) {
             detailsHtml = '<dl class="req-details">';
             if (req.rationale) detailsHtml += `<dt>理由:</dt><dd>${escapeHtmlWithBreaks(req.rationale)}</dd>`;
             if (req.specification) detailsHtml += `<dt>仕様:</dt><dd>${escapeHtmlWithBreaks(req.specification)}</dd>`;
+            if (req.category) detailsHtml += `<dt>分類:</dt><dd>${escapeHtml(req.category)}</dd>`;
             detailsHtml += '</dl>';
         }
         
@@ -422,10 +424,11 @@ function addRootRequirement() {
     document.getElementById('description').value = '';
     document.getElementById('rationale').value = '';
     document.getElementById('specification').value = '';
-    
+    document.getElementById('category').value = '';
+
     const maxL1 = Math.max(0, ...requirements.filter(r => getLevel(r) === 1).map(r => parseInt(r.level1_id) || 0));
     document.getElementById('level1_id').value = maxL1 + 1;
-    
+
     updateIdDisplay();
     openModal('新規要求を追加');
 }
@@ -445,7 +448,8 @@ function addChildRequirement(parentId) {
     document.getElementById('description').value = '';
     document.getElementById('rationale').value = '';
     document.getElementById('specification').value = '';
-    
+    document.getElementById('category').value = '';
+
     const childLevel = parentLevel + 1;
     const childIdField = `level${childLevel}_id`;
     
@@ -482,6 +486,7 @@ function editRequirement(index) {
     document.getElementById('description').value = req.description;
     document.getElementById('rationale').value = req.rationale || '';
     document.getElementById('specification').value = req.specification || '';
+    document.getElementById('category').value = req.category || '';
     updateIdDisplay();
     openModal('要求を編集');
 }
@@ -661,7 +666,8 @@ function handleFormSubmit(e) {
         level4_id: document.getElementById('level4_id').value.trim(),
         description: document.getElementById('description').value,
         rationale: document.getElementById('rationale').value,
-        specification: document.getElementById('specification').value
+        specification: document.getElementById('specification').value,
+        category: document.getElementById('category').value.trim()
     };
     
     const newFullId = getFullId(newReq);
@@ -707,7 +713,7 @@ function handleFormSubmit(e) {
 
 // CSVエクスポート
 function exportCSV() {
-    const headers = ['レベル1 ID', 'レベル2 ID', 'レベル3 ID', 'レベル4 ID', '要求', '理由', '仕様'];
+    const headers = ['レベル1 ID', 'レベル2 ID', 'レベル3 ID', 'レベル4 ID', '要求', '理由', '仕様', '分類'];
     const rows = requirements.map(req => [
         req.level1_id,
         req.level2_id || '',
@@ -715,7 +721,8 @@ function exportCSV() {
         req.level4_id || '',
         req.description,
         req.rationale || '',
-        req.specification || ''
+        req.specification || '',
+        req.category || ''
     ]);
     
     const csvLines = [
@@ -823,7 +830,8 @@ function importCSV(event) {
                     level4_id: (cells[3] || '').trim(),
                     description: (cells[4] || '').trim(),
                     rationale: (cells[5] || '').trim(),
-                    specification: (cells[6] || '').trim()
+                    specification: (cells[6] || '').trim(),
+                    category: (cells[7] || '').trim()
                 };
                 
                 const errors = validateRequirement(req, i + 1);
@@ -840,6 +848,31 @@ function importCSV(event) {
                 errorMsg += allErrors.slice(0, maxShow).join('\n');
                 if (allErrors.length > maxShow) {
                     errorMsg += `\n...他${allErrors.length - maxShow}件`;
+                }
+                alert(errorMsg);
+                return;
+            }
+
+            // 親要求の存在チェック
+            const importedIds = new Set(newRequirements.map(r => getFullId(r)));
+            const parentErrors = [];
+
+            for (const req of newRequirements) {
+                const level = getLevel(req);
+                if (level >= 2) {
+                    const parentId = getParentId(req);
+                    if (!importedIds.has(parentId)) {
+                        parentErrors.push(`要求 "${getFullId(req)}": 親要求 "${parentId}" が存在しません`);
+                    }
+                }
+            }
+
+            if (parentErrors.length > 0) {
+                const maxShow = 10;
+                let errorMsg = `親要求が存在しないエラーが${parentErrors.length}件あります:\n\n`;
+                errorMsg += parentErrors.slice(0, maxShow).join('\n');
+                if (parentErrors.length > maxShow) {
+                    errorMsg += `\n...他${parentErrors.length - maxShow}件`;
                 }
                 alert(errorMsg);
                 return;
@@ -1008,10 +1041,11 @@ function generatePrintContent() {
         const fullId = getFullId(req);
         
         let detailsHtml = '';
-        if (req.rationale || req.specification) {
+        if (req.rationale || req.specification || req.category) {
             detailsHtml = '<div class="req-details">';
             if (req.rationale) detailsHtml += `<dt>理由:</dt><dd>${escapeHtmlWithBreaks(req.rationale)}</dd>`;
             if (req.specification) detailsHtml += `<dt>仕様:</dt><dd>${escapeHtmlWithBreaks(req.specification)}</dd>`;
+            if (req.category) detailsHtml += `<dt>分類:</dt><dd>${escapeHtml(req.category)}</dd>`;
             detailsHtml += '</div>';
         }
         
