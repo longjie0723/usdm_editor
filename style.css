@@ -185,15 +185,16 @@ h1 {
     z-index: 1000;
     justify-content: center;
     align-items: center;
+    padding: 60px;
 }
 .modal-overlay.active { display: flex; }
 .modal {
     background: white;
     border-radius: 8px;
-    padding: 24px;
-    width: 90%;
+    padding: 30px;
+    width: 100%;
     max-width: 600px;
-    max-height: 90vh;
+    max-height: 100%;
     overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }

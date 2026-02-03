@@ -110,9 +110,17 @@ function setupEventListeners() {
         document.getElementById(id).addEventListener('input', updateIdDisplay);
     });
     
-    // モーダル外クリックで閉じる
-    document.getElementById('modal-overlay').addEventListener('click', function(e) {
-        if (e.target === this) closeModal();
+    // モーダル外クリックで閉じる（mousedownとmouseupの両方がオーバーレイ上で発生した場合のみ）
+    const modalOverlay = document.getElementById('modal-overlay');
+    let mouseDownOnOverlay = false;
+    modalOverlay.addEventListener('mousedown', function(e) {
+        mouseDownOnOverlay = (e.target === this);
+    });
+    modalOverlay.addEventListener('mouseup', function(e) {
+        if (mouseDownOnOverlay && e.target === this) {
+            closeModal();
+        }
+        mouseDownOnOverlay = false;
     });
     
     // ESCキーで閉じる
