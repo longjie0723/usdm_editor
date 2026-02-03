@@ -150,6 +150,29 @@ h1 {
 .children { margin-top: 5px; }
 .children.collapsed { display: none; }
 
+/* ドラッグアンドドロップ */
+.requirement[draggable="true"] {
+    cursor: grab;
+}
+.requirement[draggable="true"]:active {
+    cursor: grabbing;
+}
+.requirement.dragging {
+    opacity: 0.5;
+}
+.requirement.drag-over-before {
+    border-top: 3px solid #4a90d9;
+    margin-top: 2px;
+}
+.requirement.drag-over-after {
+    border-bottom: 3px solid #4a90d9;
+    margin-bottom: 2px;
+}
+.requirement.drag-over-child {
+    background: #d4edff;
+    box-shadow: inset 0 0 0 2px #4a90d9;
+}
+
 /* モーダル */
 .modal-overlay {
     display: none;

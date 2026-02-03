@@ -125,6 +125,17 @@ function setupEventListeners() {
     
     // ツリーコンテナのイベント委譲
     document.getElementById('tree-container').addEventListener('click', handleTreeClick);
+
+    // ドラッグアンドドロップ
+    const treeContainer = document.getElementById('tree-container');
+    treeContainer.addEventListener('dragstart', handleDragStart);
+    treeContainer.addEventListener('dragend', handleDragEnd);
+    treeContainer.addEventListener('dragover', handleDragOverTree);
+    treeContainer.addEventListener('dragleave', handleDragLeave);
+    treeContainer.addEventListener('drop', handleDrop);
+
+    // 自動スクロール用（document全体で監視）
+    document.addEventListener('dragover', handleDragOverDocument);
 }
 
 // タイトルの編集
@@ -273,7 +284,7 @@ function renderNode(node) {
         const canLevelDown = level < 4 && !hasChildren;
         
         html += `
-            <div class="requirement level-${level}" data-id="${fullId}" data-index="${child.index}">
+            <div class="requirement level-${level}" data-id="${fullId}" data-index="${child.index}" draggable="true">
                 <div class="req-header">
                     <button class="toggle-btn ${hasChildren ? '' : 'hidden'}" data-action="toggle">−</button>
                     <span class="level-badge">L${level}</span>
@@ -1070,5 +1081,429 @@ function clearAllData() {
         requirements = [];
         saveData();
         renderTree(false);
+    }
+}
+
+// ドラッグアンドドロップ関連
+let draggedIndex = null;
+let autoScrollInterval = null;
+const SCROLL_THRESHOLD = 60; // スクロール開始する画面端からの距離(px)
+const SCROLL_SPEED = 8; // スクロール速度(px)
+
+function handleDragStart(e) {
+    const reqEl = e.target.closest('.requirement');
+    if (!reqEl) return;
+
+    draggedIndex = parseInt(reqEl.dataset.index);
+    reqEl.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', draggedIndex);
+}
+
+function handleDragEnd(e) {
+    const reqEl = e.target.closest('.requirement');
+    if (reqEl) {
+        reqEl.classList.remove('dragging');
+    }
+    clearDragIndicators();
+    stopAutoScroll();
+    draggedIndex = null;
+}
+
+// 自動スクロール用（document全体で監視）
+function handleDragOverDocument(e) {
+    if (draggedIndex === null) return;
+
+    const mouseY = e.clientY;
+    const windowHeight = window.innerHeight;
+
+    if (mouseY < SCROLL_THRESHOLD) {
+        // 上端に近い場合、上にスクロール
+        const speed = Math.ceil((SCROLL_THRESHOLD - mouseY) / SCROLL_THRESHOLD * SCROLL_SPEED);
+        startAutoScroll(-speed);
+    } else if (mouseY > windowHeight - SCROLL_THRESHOLD) {
+        // 下端に近い場合、下にスクロール
+        const speed = Math.ceil((mouseY - (windowHeight - SCROLL_THRESHOLD)) / SCROLL_THRESHOLD * SCROLL_SPEED);
+        startAutoScroll(speed);
+    } else {
+        stopAutoScroll();
+    }
+}
+
+// ツリーコンテナ内でのドラッグオーバー処理
+function handleDragOverTree(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    const reqEl = e.target.closest('.requirement');
+    if (!reqEl || parseInt(reqEl.dataset.index) === draggedIndex) return;
+
+    clearDragIndicators();
+
+    const rect = reqEl.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const height = rect.height;
+    const targetLevel = getLevel(requirements[parseInt(reqEl.dataset.index)]);
+
+    if (y < height * 0.25) {
+        reqEl.classList.add('drag-over-before');
+    } else if (y > height * 0.75) {
+        reqEl.classList.add('drag-over-after');
+    } else if (targetLevel < 4) {
+        reqEl.classList.add('drag-over-child');
+    } else {
+        reqEl.classList.add('drag-over-after');
+    }
+}
+
+function handleDragLeave(e) {
+    const reqEl = e.target.closest('.requirement');
+    if (reqEl) {
+        reqEl.classList.remove('drag-over-before', 'drag-over-after', 'drag-over-child');
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    clearDragIndicators();
+
+    const reqEl = e.target.closest('.requirement');
+    if (!reqEl || draggedIndex === null) return;
+
+    const targetIndex = parseInt(reqEl.dataset.index);
+    if (targetIndex === draggedIndex) return;
+
+    const rect = reqEl.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const height = rect.height;
+
+    const draggedReq = requirements[draggedIndex];
+    const targetReq = requirements[targetIndex];
+    const targetLevel = getLevel(targetReq);
+
+    let dropType;
+    if (y < height * 0.25) {
+        dropType = 'before';
+    } else if (y > height * 0.75) {
+        dropType = 'after';
+    } else if (targetLevel < 4) {
+        dropType = 'child';
+    } else {
+        dropType = 'after';
+    }
+
+    // 一時IDを先に割り当て
+    let tempId = 0;
+    for (const req of requirements) {
+        req._tempId = tempId++;
+    }
+
+    // 展開状態を記録
+    const expandedTempIds = new Set();
+    document.querySelectorAll('.requirement').forEach(el => {
+        const children = el.querySelector(':scope > .children');
+        if (children && !children.classList.contains('collapsed')) {
+            const index = parseInt(el.dataset.index);
+            if (requirements[index]) {
+                expandedTempIds.add(requirements[index]._tempId);
+            }
+        }
+    });
+
+    // ドラッグ対象とその子孫を取得
+    const draggedFullId = getFullId(draggedReq);
+    const draggedItems = requirements.filter(r => {
+        const rId = getFullId(r);
+        return rId === draggedFullId || rId.startsWith(draggedFullId + '-');
+    });
+
+    // 自分の子孫にドロップしようとした場合は無効
+    const targetFullId = getFullId(targetReq);
+    if (targetFullId.startsWith(draggedFullId + '-')) {
+        return;
+    }
+
+    // 残りの要求を取得
+    const remainingReqs = requirements.filter(r => {
+        const rId = getFullId(r);
+        return rId !== draggedFullId && !rId.startsWith(draggedFullId + '-');
+    });
+
+    // 新しい配列を構築
+    const newRequirements = [];
+
+    if (dropType === 'child') {
+        // ターゲットの子として追加
+        for (const r of remainingReqs) {
+            newRequirements.push({ ...r, _tempId: r._tempId });
+            if (getFullId(r) === targetFullId) {
+                // ターゲットの直後に子として追加
+                const draggedBaseLevel = getLevel(draggedReq);
+                const newBaseLevel = targetLevel + 1;
+                const levelDiff = newBaseLevel - draggedBaseLevel;
+
+                // レベルオーバーチェック
+                for (const item of draggedItems) {
+                    const oldLevel = getLevel(item);
+                    if (newBaseLevel + (oldLevel - draggedBaseLevel) > 4) {
+                        alert('レベル4を超えるためドロップできません');
+                        return;
+                    }
+                }
+
+                for (const item of draggedItems) {
+                    const newItem = { ...item, _tempId: item._tempId };
+                    const oldLevel = getLevel(item);
+                    const newLevel = oldLevel + levelDiff;
+
+                    // ターゲットのIDをベースに新しいIDを構築
+                    newItem.level1_id = targetReq.level1_id;
+                    newItem.level2_id = targetReq.level2_id || '';
+                    newItem.level3_id = targetReq.level3_id || '';
+                    newItem.level4_id = targetReq.level4_id || '';
+
+                    // 新しいレベルに応じてIDを設定（中間レベルも確実に埋める）
+                    if (newLevel === 2) {
+                        if (!newItem.level2_id) newItem.level2_id = '1';
+                        newItem.level3_id = '';
+                        newItem.level4_id = '';
+                    } else if (newLevel === 3) {
+                        if (!newItem.level2_id) newItem.level2_id = '1';
+                        if (!newItem.level3_id) newItem.level3_id = '1';
+                        newItem.level4_id = '';
+                    } else if (newLevel === 4) {
+                        if (!newItem.level2_id) newItem.level2_id = '1';
+                        if (!newItem.level3_id) newItem.level3_id = '1';
+                        if (!newItem.level4_id) newItem.level4_id = '1';
+                    }
+
+                    newRequirements.push(newItem);
+                }
+            }
+        }
+    } else {
+        // before または after
+        // レベルオーバーチェック
+        const draggedBaseLevel = getLevel(draggedReq);
+        for (const item of draggedItems) {
+            const oldLevel = getLevel(item);
+            const newLevel = targetLevel + (oldLevel - draggedBaseLevel);
+            if (newLevel < 1 || newLevel > 4) {
+                alert('移動先のレベルが範囲外のためドロップできません');
+                return;
+            }
+        }
+
+        // 移動グループ用にユニークなlevel1_idを生成
+        const maxL1Id = Math.max(0, ...remainingReqs.filter(r => getLevel(r) === 1).map(r => parseInt(r.level1_id) || 0));
+        const draggedRootNewL1Id = String(maxL1Id + 1);
+
+        for (const r of remainingReqs) {
+            const rFullId = getFullId(r);
+            if (dropType === 'before' && rFullId === targetFullId) {
+                // ターゲットの前に挿入
+                for (const item of draggedItems) {
+                    const newItem = { ...item, _tempId: item._tempId };
+                    // 同じレベルになるようにIDを調整
+                    adjustItemLevel(newItem, draggedReq, targetReq, draggedRootNewL1Id);
+                    newRequirements.push(newItem);
+                }
+            }
+            newRequirements.push({ ...r, _tempId: r._tempId });
+            if (dropType === 'after' && rFullId === targetFullId) {
+                // ターゲットの後に挿入
+                for (const item of draggedItems) {
+                    const newItem = { ...item, _tempId: item._tempId };
+                    adjustItemLevel(newItem, draggedReq, targetReq, draggedRootNewL1Id);
+                    newRequirements.push(newItem);
+                }
+            }
+        }
+    }
+
+    // スクロール位置を保存
+    const scrollY = window.scrollY;
+
+    requirements = newRequirements;
+    reassignIds();
+    saveData();
+    renderTree(false);
+
+    // 展開状態を復元（一時IDを使用）
+    const expandedNewIds = new Set();
+    const targetTempId = targetReq._tempId;
+    const draggedTempId = draggedReq._tempId;
+    for (const req of requirements) {
+        if (expandedTempIds.has(req._tempId)) {
+            expandedNewIds.add(getFullId(req));
+        }
+        // 子として移動した場合、移動先の親を展開状態にする
+        if (dropType === 'child' && req._tempId === targetTempId) {
+            expandedNewIds.add(getFullId(req));
+        }
+        // before/afterで移動した場合、移動した要求の親を展開状態にする
+        if ((dropType === 'before' || dropType === 'after') && req._tempId === draggedTempId) {
+            const parentId = getParentId(req);
+            if (parentId) {
+                expandedNewIds.add(parentId);
+            }
+        }
+        delete req._tempId;
+    }
+
+    restoreExpandedState(expandedNewIds);
+
+    // スクロール位置を復元
+    requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY);
+    });
+}
+
+function adjustItemLevel(newItem, draggedReq, targetReq, draggedRootNewL1Id) {
+    const draggedLevel = getLevel(draggedReq);
+    const targetLevel = getLevel(targetReq);
+    const levelDiff = targetLevel - draggedLevel;
+    const itemLevel = getLevel(newItem);
+    const newLevel = itemLevel + levelDiff;
+
+    if (newLevel < 1 || newLevel > 4) {
+        return false;
+    }
+
+    // 全ての移動アイテムは同じlevel1_idを共有する
+    // ターゲットがL1の場合：ユニークなIDを使用（既存L1との競合を避ける）
+    // ターゲットがL2以上の場合：ターゲットのlevel1_idを使用
+    if (targetLevel === 1) {
+        newItem.level1_id = draggedRootNewL1Id;
+    } else {
+        newItem.level1_id = targetReq.level1_id;
+    }
+
+    // 初期化
+    newItem.level2_id = '';
+    newItem.level3_id = '';
+    newItem.level4_id = '';
+
+    // ターゲットの「親」構造のみをコピー（targetLevel未満のレベル）
+    // 例：L2ターゲットの場合、level2_idはコピーしない（それはターゲット自身のレベル）
+    // L3ターゲットの場合、level2_idはコピーする（それは親のレベル）
+    if (targetLevel >= 3) newItem.level2_id = targetReq.level2_id || '';
+    if (targetLevel >= 4) newItem.level3_id = targetReq.level3_id || '';
+
+    // ユニークなプレースホルダーを使用（既存アイテムと競合しないように）
+    // これにより、移動グループ内のアイテムは同じプレースホルダーを共有し、
+    // reassignIdsで正しくグループ化される
+    if (newLevel >= 2 && !newItem.level2_id) newItem.level2_id = '9999';
+    if (newLevel >= 3 && !newItem.level3_id) newItem.level3_id = '9999';
+    if (newLevel >= 4 && !newItem.level4_id) newItem.level4_id = '9999';
+
+    return true;
+}
+
+function clearDragIndicators() {
+    document.querySelectorAll('.drag-over-before, .drag-over-after, .drag-over-child').forEach(el => {
+        el.classList.remove('drag-over-before', 'drag-over-after', 'drag-over-child');
+    });
+}
+
+function startAutoScroll(speed) {
+    if (autoScrollInterval !== null) {
+        // 既にスクロール中の場合は速度を更新するため一旦停止
+        clearInterval(autoScrollInterval);
+    }
+    autoScrollInterval = setInterval(() => {
+        window.scrollBy(0, speed);
+    }, 16); // 約60fps
+}
+
+function stopAutoScroll() {
+    if (autoScrollInterval !== null) {
+        clearInterval(autoScrollInterval);
+        autoScrollInterval = null;
+    }
+}
+
+// IDを順番に再割り当て
+function reassignIds() {
+    reassignIdsRecursive(requirements);
+}
+
+function reassignIdsRecursive(reqs) {
+    // L1から順番に処理
+    const l1Items = reqs.filter(r => getLevel(r) === 1);
+    const l1Counter = {};
+
+    let l1Num = 1;
+    for (const item of l1Items) {
+        const oldId = item.level1_id;
+        item.level1_id = String(l1Num);
+        l1Counter[oldId] = String(l1Num);
+        l1Num++;
+    }
+
+    // L2, L3のIDマッピングを追跡（子要素の親ID更新用）
+    // キー: "親ID-旧レベルID", 値: "新レベルID"
+    const l2Counter = {};
+    const l3Counter = {};
+
+    // L2-L4の親IDを更新し、順番を振り直す
+    for (let level = 2; level <= 4; level++) {
+        const itemsAtLevel = reqs.filter(r => getLevel(r) === level);
+        const parentGroups = {};
+
+        for (const item of itemsAtLevel) {
+            // level1_idを更新
+            if (l1Counter[item.level1_id]) {
+                item.level1_id = l1Counter[item.level1_id];
+            }
+
+            // L3以上の場合、level2_idを更新（L2の番号振り直しに追従）
+            if (level >= 3 && item.level2_id) {
+                const l2Key = item.level1_id + '-' + item.level2_id;
+                if (l2Counter[l2Key]) {
+                    item.level2_id = l2Counter[l2Key];
+                }
+            }
+
+            // L4の場合、level3_idを更新（L3の番号振り直しに追従）
+            if (level >= 4 && item.level3_id) {
+                const l3Key = item.level1_id + '-' + item.level2_id + '-' + item.level3_id;
+                if (l3Counter[l3Key]) {
+                    item.level3_id = l3Counter[l3Key];
+                }
+            }
+
+            const parentId = getParentId(item);
+            if (!parentGroups[parentId]) {
+                parentGroups[parentId] = [];
+            }
+            parentGroups[parentId].push(item);
+        }
+
+        // 各親グループ内で連番を振る
+        for (const parentId of Object.keys(parentGroups)) {
+            const group = parentGroups[parentId];
+            let num = 1;
+            for (const item of group) {
+                if (level === 2) {
+                    // L2のマッピングを保存（L3+の子要素用）
+                    const oldL2 = item.level2_id;
+                    const newL2 = String(num);
+                    const l2Key = item.level1_id + '-' + oldL2;
+                    l2Counter[l2Key] = newL2;
+                    item.level2_id = newL2;
+                } else if (level === 3) {
+                    // L3のマッピングを保存（L4の子要素用）
+                    const oldL3 = item.level3_id;
+                    const newL3 = String(num);
+                    const l3Key = item.level1_id + '-' + item.level2_id + '-' + oldL3;
+                    l3Counter[l3Key] = newL3;
+                    item.level3_id = newL3;
+                } else if (level === 4) {
+                    item.level4_id = String(num);
+                }
+                num++;
+            }
+        }
     }
 }
