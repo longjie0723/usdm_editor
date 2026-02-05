@@ -99,6 +99,7 @@ function setupEventListeners() {
     document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
     document.getElementById('csv-import').addEventListener('change', importCSV);
     document.getElementById('btn-export-pdf').addEventListener('click', exportPDF);
+    document.getElementById('btn-export-checklist').addEventListener('click', exportChecklist);
     document.getElementById('btn-clear-data').addEventListener('click', clearAllData);
     
     // フォーム
@@ -1043,6 +1044,170 @@ function exportPDF() {
     `);
     printWindow.document.close();
     
+    setTimeout(() => {
+        printWindow.print();
+    }, 300);
+}
+
+// 分類別チェックリストPDF出力
+function exportChecklist() {
+    // 分類ごとにグループ化
+    const categoryGroups = {};
+    const noCategory = [];
+
+    for (const req of requirements) {
+        if (req.category && req.category.trim()) {
+            const cat = req.category.trim();
+            if (!categoryGroups[cat]) {
+                categoryGroups[cat] = [];
+            }
+            categoryGroups[cat].push(req);
+        } else {
+            noCategory.push(req);
+        }
+    }
+
+    // 分類名でソート
+    const sortedCategories = Object.keys(categoryGroups).sort((a, b) =>
+        a.localeCompare(b, 'ja')
+    );
+
+    // HTMLを生成
+    let checklistHtml = '';
+
+    for (const category of sortedCategories) {
+        const reqs = categoryGroups[category].sort((a, b) =>
+            getFullId(a).localeCompare(getFullId(b), undefined, { numeric: true })
+        );
+
+        checklistHtml += `<div class="category-section">`;
+        checklistHtml += `<h2 class="category-title">${escapeHtml(category)}</h2>`;
+        checklistHtml += `<table class="checklist-table">`;
+        checklistHtml += `<thead><tr><th class="check-col"></th><th class="id-col">ID</th><th class="desc-col">要求</th></tr></thead>`;
+        checklistHtml += `<tbody>`;
+
+        for (const req of reqs) {
+            const fullId = getFullId(req);
+            checklistHtml += `
+                <tr>
+                    <td class="check-col"><div class="checkbox"></div></td>
+                    <td class="id-col">${escapeHtml(fullId)}</td>
+                    <td class="desc-col">${escapeHtml(req.description)}</td>
+                </tr>
+            `;
+        }
+
+        checklistHtml += `</tbody></table></div>`;
+    }
+
+    // 分類なしの要求
+    if (noCategory.length > 0) {
+        const reqs = noCategory.sort((a, b) =>
+            getFullId(a).localeCompare(getFullId(b), undefined, { numeric: true })
+        );
+
+        checklistHtml += `<div class="category-section">`;
+        checklistHtml += `<h2 class="category-title">（分類なし）</h2>`;
+        checklistHtml += `<table class="checklist-table">`;
+        checklistHtml += `<thead><tr><th class="check-col"></th><th class="id-col">ID</th><th class="desc-col">要求</th></tr></thead>`;
+        checklistHtml += `<tbody>`;
+
+        for (const req of reqs) {
+            const fullId = getFullId(req);
+            checklistHtml += `
+                <tr>
+                    <td class="check-col"><div class="checkbox"></div></td>
+                    <td class="id-col">${escapeHtml(fullId)}</td>
+                    <td class="desc-col">${escapeHtml(req.description)}</td>
+                </tr>
+            `;
+        }
+
+        checklistHtml += `</tbody></table></div>`;
+    }
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>${escapeHtml(documentTitle)} - チェックリスト</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Hiragino Kaku Gothic ProN', 'メイリオ', sans-serif;
+            padding: 10mm;
+            font-size: 10pt;
+        }
+        h1 {
+            font-size: 14pt;
+            border-bottom: 2px solid #333;
+            padding-bottom: 3px;
+            margin-bottom: 12px;
+        }
+        .category-section {
+            margin-bottom: 15px;
+            page-break-inside: avoid;
+        }
+        .category-title {
+            font-size: 12pt;
+            background: #f0f0f0;
+            padding: 5px 10px;
+            margin-bottom: 5px;
+            border-left: 4px solid #9b59b6;
+        }
+        .checklist-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        .checklist-table th,
+        .checklist-table td {
+            border: 1px solid #ccc;
+            padding: 4px 6px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .checklist-table thead {
+            background: #f5f5f5;
+        }
+        .checklist-table th {
+            font-weight: bold;
+            font-size: 9pt;
+        }
+        .check-col {
+            width: 25px;
+            text-align: center;
+        }
+        .checkbox {
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid #333;
+            margin: 0 auto;
+        }
+        .id-col {
+            width: 80px;
+            font-family: monospace;
+            font-size: 9pt;
+            white-space: nowrap;
+        }
+        .desc-col {
+            font-size: 9pt;
+        }
+        tr {
+            page-break-inside: avoid;
+        }
+    </style>
+</head>
+<body>
+    <h1>${escapeHtml(documentTitle)} - チェックリスト</h1>
+    ${checklistHtml}
+</body>
+</html>
+    `);
+    printWindow.document.close();
+
     setTimeout(() => {
         printWindow.print();
     }, 300);
